@@ -3,9 +3,8 @@ import logging
 import requests
 import json
 from datetime import datetime
-import hashlib  # Import hashlib for creating a hash
-
-import pandas as pd  # Import pandas library
+import hashlib
+import pandas as pd
 
 from keboola.component.base import ComponentBase
 from keboola.component.exceptions import UserException
@@ -40,7 +39,7 @@ class Component(ComponentBase):
         response = requests.post(url, headers=headers, data=json.dumps(payload))
 
         if response.status_code == 204:
-            return "Email updated"
+            return "Email updated (Sms,Email)"
         elif response.status_code == 200:
             return response.json()
         elif response.status_code == 404:
@@ -48,6 +47,25 @@ class Component(ComponentBase):
             return "Email not found"
         else:
             raise UserException(f"Failed to send data to API. Status Code: {response.status_code}, Response: {response.text}")
+
+    def delete_data_from_api(self, email):
+        """
+        Deletes data from the specified API endpoint based on email.
+        """
+        url = f"https://api.brevo.com/v3/smtp/blockedContacts/{email}"
+        headers = {
+            "accept": "application/json",
+            "api-key": self.configuration.parameters.get(KEY_API_TOKEN)
+        }
+        response = requests.delete(url, headers=headers)
+
+        if response.status_code == 204:
+            return "Unblock or resubscribe a transactional Email"
+        elif response.status_code == 404:
+            logging.warning(f"API returned 404 status. Response: {response.text}")
+            return "Transactional Email not found"
+        else:
+            raise UserException(f"Failed to delete data from API. Status Code: {response.status_code}, Response: {response.text}")
 
     def _parse_table(self):
         """
@@ -85,7 +103,7 @@ class Component(ComponentBase):
 
         # Open output file, set headers, writer and write headers
         self._output_file = open(self.output_table.full_path, 'wt', encoding='UTF-8', newline='')
-        output_fields = ['id', 'email', 'status', 'timestamp']
+        output_fields = ['id',  'timestamp','email', 'status']
         self._output_writer = csv.DictWriter(self._output_file, fieldnames=output_fields)
         self._output_writer.writeheader()
 
@@ -108,12 +126,12 @@ class Component(ComponentBase):
             csv_data = self._parse_table()
 
             # Select specific columns from CSV data
-            selected_columns = ['email', 'emailBlacklisted', 'smsBlacklisted']
+            selected_columns = ['email', 'emailBlacklisted', 'smsBlacklisted', 'transactionalContact']
             csv_data = csv_data[selected_columns]
             
-            # Convert 'emailBlacklisted' column to boolean
-            csv_data['emailBlacklisted'] = csv_data['emailBlacklisted'].astype(bool)
-            csv_data['smsBlacklisted'] = csv_data['smsBlacklisted'].astype(bool)
+            # Convert 'emailBlacklisted' and 'smsBlacklisted' columns to boolean
+            csv_data['emailBlacklisted'] = csv_data['emailBlacklisted'].apply(lambda x: True if x.lower() == 'true' else False)
+            csv_data['smsBlacklisted'] = csv_data['smsBlacklisted'].apply(lambda x: True if x.lower() == 'true' else False)
 
             # Prepare payload with a maximum of 100 records
             max_records_per_request = 1
@@ -147,10 +165,19 @@ class Component(ComponentBase):
                             'timestamp': timestamp
                         })
 
-            # Log all responses
-            for i, response in enumerate(responses, start=1):
-                if response:
-                    logging.info(f"API Response {i}: {email} {response}")
+                        # Check if 'transactionalContact' is 'yes'
+                        if record.get('transactionalContact', '').lower() == 'true':
+                            # Delete the email using the delete_data_from_api method
+                            delete_api_response = self.delete_data_from_api(email)
+
+                            # Write the deleted data to the output CSV file
+                            deleted_record_hash = self.create_hash(email, timestamp)
+                            self._output_writer.writerow({
+                                'id': deleted_record_hash,
+                                'email': email,
+                                'status': delete_api_response,
+                                'timestamp': timestamp
+                            })
 
         except UserException as exc:
             logging.exception(exc)
