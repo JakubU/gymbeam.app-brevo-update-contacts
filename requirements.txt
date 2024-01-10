@@ -4,7 +4,3 @@ keboola.http-client
 mock
 freezegun
 requests
-pandas
-hashlib
-datetime
-json
