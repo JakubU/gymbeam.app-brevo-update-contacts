@@ -5,14 +5,12 @@
     "print_hello"
   ],
   "properties": {
-    "print_hello": {
-      "type": "boolean",
-      "title": "Print Hello",
-      "propertyOrder": 1
-    },
-    "debug": {
-      "type": "boolean",
-      "title": "Debug",
+    "#api_key": {
+      "type": "string",
+      "title": "Api Key",
+      "format": "password",
+      "default": "",
+      "minLength": 1,
       "propertyOrder": 2
     }
   }
