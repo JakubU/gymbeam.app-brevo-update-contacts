@@ -1,9 +1,6 @@
 {
   "type": "object",
   "title": "extractor configuration",
-  "required": [
-    "print_hello"
-  ],
   "properties": {
     "#api_key": {
       "type": "string",
